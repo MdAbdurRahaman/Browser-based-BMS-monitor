@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BMS Serial Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Semi+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Sans+3:wght@400;600&display=swap">
+<style>
+/* Layout: control strip on top, pack summary + cell array, then trend and raw serial log */
+:root{
+  --bg:#eef1f0; --panel:#fbfcfc; --line:#d3dad8; --fg:#17201e; --muted:#5d6b68;
+  --accent:#0f7b6c; --accent-ink:#ffffff;
+  --good:#1f8a4c; --warn:#b7791f; --bad:#c2372f; --chg:#1f6fb8;
+  --f-display:"Saira Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1514; --panel:#161e1d; --line:#2a3634; --fg:#e3ebe9; --muted:#8fa09c;
+  --accent:#35c2ab; --accent-ink:#06201b;
+  --good:#45c47c; --warn:#e0a33c; --bad:#ef6a5f; --chg:#5aa8ef; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1514; --panel:#161e1d; --line:#2a3634; --fg:#e3ebe9; --muted:#8fa09c;
+  --accent:#35c2ab; --accent-ink:#06201b;
+  --good:#45c47c; --warn:#e0a33c; --bad:#ef6a5f; --chg:#5aa8ef; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--f-body);
+  padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:16px}
+h1{font:700 26px/1.1 var(--f-display);letter-spacing:.01em;margin:0}
+h2{font:600 13px/1 var(--f-display);text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:0 0 12px}
+.mono,.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+header{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;justify-content:space-between}
+.port{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:14px}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--muted)}
+.dot.on{background:var(--good);box-shadow:0 0 0 4px color-mix(in srgb,var(--good) 25%,transparent)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+.controls{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+label{display:grid;gap:4px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+select,input{font:14px var(--f-body);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px;min-width:0}
+button{font:600 14px var(--f-body);border-radius:6px;padding:8px 14px;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.notice{border-left:3px solid var(--warn);padding:8px 12px;background:color-mix(in srgb,var(--warn) 10%,var(--panel));border-radius:4px;font-size:14px}
+.notice[data-kind="err"]{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,var(--panel))}
+.notice[data-kind="ok"]{border-color:var(--good);background:color-mix(in srgb,var(--good) 10%,var(--panel))}
+
+.summary{display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:16px}
+@media (max-width:760px){.summary{grid-template-columns:1fr}}
+.soc{display:grid;gap:10px;align-content:start}
+.batt{position:relative;height:120px;border:3px solid var(--fg);border-radius:10px;padding:5px}
+.batt::after{content:"";position:absolute;right:-11px;top:38px;width:8px;height:38px;background:var(--fg);border-radius:0 4px 4px 0}
+.batt-fill{height:100%;border-radius:4px;background:var(--good);transition:width .4s}
+.batt-txt{position:absolute;inset:0;display:grid;place-items:center;font:700 40px var(--f-display);color:var(--fg);mix-blend-mode:normal;text-shadow:0 0 6px var(--panel)}
+.state{display:flex;gap:8px;flex-wrap:wrap}
+.chip{font:600 12px var(--f-body);text-transform:uppercase;letter-spacing:.08em;padding:4px 9px;border-radius:999px;border:1px solid currentColor}
+.chip.good{color:var(--good)} .chip.bad{color:var(--bad)} .chip.chg{color:var(--chg)} .chip.muted{color:var(--muted)} .chip.warn{color:var(--warn)}
+.metrics{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.m{background:var(--panel);padding:12px 14px}
+.m .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.m .v{font:600 24px/1.2 var(--f-mono);font-variant-numeric:tabular-nums}
+.m .v small{font:500 13px var(--f-body);color:var(--muted);margin-left:3px}
+
+.cells{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px}
+.cell{border:1px solid var(--line);border-radius:6px;padding:8px;display:grid;gap:6px}
+.cell .n{font-size:11px;color:var(--muted);display:flex;justify-content:space-between}
+.cell .bar{height:56px;background:var(--bg);border-radius:3px;display:flex;align-items:flex-end;overflow:hidden}
+.cell .bar i{display:block;width:100%;background:var(--accent);opacity:.75}
+.cell .mv{font:600 14px var(--f-mono);text-align:center}
+.cell.max{border-color:var(--chg)} .cell.max .bar i{background:var(--chg);opacity:1}
+.cell.min{border-color:var(--warn)} .cell.min .bar i{background:var(--warn);opacity:1}
+.cellstats{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:14px;color:var(--muted);margin-bottom:12px}
+.cellstats b{color:var(--fg);font-family:var(--f-mono);font-weight:600}
+
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:860px){.two{grid-template-columns:1fr}}
+canvas{width:100%;height:200px;display:block}
+.legend{display:flex;gap:16px;font-size:13px;color:var(--muted);margin-top:6px}
+.legend span::before{content:"";display:inline-block;width:12px;height:3px;margin-right:6px;vertical-align:middle;background:var(--c)}
+.log{height:200px;overflow:auto;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px;font:12px/1.5 var(--f-mono);white-space:pre-wrap;word-break:break-all}
+.log .tx{color:var(--chg)} .log .rx{color:var(--good)} .log .er{color:var(--bad)}
+.rawrow{display:flex;gap:8px;margin-top:8px}
+.rawrow input{flex:1;font-family:var(--f-mono)}
+.faults{display:flex;flex-wrap:wrap;gap:6px}
+.demo-tag{font:600 11px var(--f-body);letter-spacing:.1em;text-transform:uppercase;color:var(--warn);border:1px dashed var(--warn);padding:2px 8px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>BMS Serial Monitor</h1>
+      <div class="port"><span class="dot" id="dot"></span><span id="portLabel">Not connected</span> <span class="demo-tag" id="demoTag">Demo data</span></div>
+    </div>
+    <div class="state" id="stateChips"></div>
+  </header>
+
+  <section class="panel">
+    <div class="controls">
+      <label for="proto">Protocol
+        <select id="proto">
+          <option value="jbd">JBD / Xiaoxiang (DD A5 …)</option>
+          <option value="daly">Daly UART (A5 40 …)</option>
+        </select>
+      </label>
+      <label for="baud">Baud
+        <select id="baud"><option>9600</option><option>19200</option><option>38400</option><option>57600</option><option>115200</option></select>
+      </label>
+      <label for="interval">Refresh
+        <select id="interval"><option value="1000">1 s</option><option value="2000" selected>2 s</option><option value="5000">5 s</option><option value="10000">10 s</option></select>
+      </label>
+      <button class="primary" id="btnConnect">Connect COM port</button>
+      <button id="btnDisconnect" disabled>Disconnect</button>
+      <button id="btnCsv">Save history CSV</button>
+    </div>
+    <p class="notice" id="notice" style="margin:12px 0 0">Click <b>Connect COM port</b> and pick <b>COM19</b> from the list. Works in Chrome or Edge on desktop. The values below are demo data until a BMS answers.</p>
+  </section>
+
+  <section class="summary">
+    <div class="panel soc">
+      <h2>State of charge</h2>
+      <div class="batt"><div class="batt-fill" id="battFill" style="width:0%"></div><div class="batt-txt" id="socTxt">–</div></div>
+      <div class="faults" id="faults"></div>
+    </div>
+    <div class="panel">
+      <h2>Pack</h2>
+      <div class="metrics">
+        <div class="m"><div class="k">Voltage</div><div class="v" id="mV">–</div></div>
+        <div class="m"><div class="k">Current</div><div class="v" id="mI">–</div></div>
+        <div class="m"><div class="k">Power</div><div class="v" id="mP">–</div></div>
+        <div class="m"><div class="k">Remaining</div><div class="v" id="mRem">–</div></div>
+        <div class="m"><div class="k">Full capacity</div><div class="v" id="mFull">–</div></div>
+        <div class="m"><div class="k">Cycles</div><div class="v" id="mCyc">–</div></div>
+        <div class="m"><div class="k">Temperatures</div><div class="v" id="mT">–</div></div>
+        <div class="m"><div class="k">Time left</div><div class="v" id="mEta">–</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Cells</h2>
+    <div class="cellstats" id="cellStats"></div>
+    <div class="cells" id="cells"></div>
+  </section>
+
+  <section class="two">
+    <div class="panel">
+      <h2>Trend</h2>
+      <canvas id="chart" width="600" height="200"></canvas>
+      <div class="legend"><span style="--c:var(--accent)" id="lgV">Voltage</span><span style="--c:var(--chg)" id="lgI">Current</span></div>
+    </div>
+    <div class="panel">
+      <h2>Serial log</h2>
+      <div class="log" id="log"></div>
+      <div class="rawrow">
+        <input id="raw" placeholder="Raw hex, e.g. DD A5 03 00 FF FD 77" aria-label="Raw hex command">
+        <button id="btnRaw">Send</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const hex = a => Array.from(a, b => b.toString(16).padStart(2,'0').toUpperCase()).join(' ');
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* ---------- serial plumbing ---------- */
+let port=null, reader=null, writer=null, rx=[], reading=false, polling=false, demo=true;
+const history=[];
+
+function log(cls, text){
+  const el=$('log'), line=document.createElement('div');
+  line.className=cls; line.textContent=new Date().toLocaleTimeString()+'  '+text;
+  el.appendChild(line); while(el.childNodes.length>300) el.removeChild(el.firstChild);
+  el.scrollTop=el.scrollHeight;
+}
+function notice(kind, html){ const n=$('notice'); n.dataset.kind=kind; n.innerHTML=html; }
+
+async function connect(){
+  if(!('serial' in navigator)){
+    notice('err','This browser has no Web Serial support. Open this file in <b>Chrome</b> or <b>Edge</b> on Windows, macOS or Linux.');
+    return;
+  }
+  try{
+    port = await navigator.serial.requestPort();
+    await port.open({baudRate:+$('baud').value, dataBits:8, stopBits:1, parity:'none'});
+  }catch(e){ notice('err','Could not open the port: '+e.message+'. Close any other program using COM19 (BMS software, Arduino monitor) and try again.'); port=null; return; }
+  writer = port.writable.getWriter();
+  reading = true; readLoop();
+  const info = port.getInfo();
+  $('portLabel').textContent = 'Connected · '+$('baud').value+' baud' + (info.usbVendorId ? ' · USB '+info.usbVendorId.toString(16).padStart(4,'0')+':'+info.usbProductId.toString(16).padStart(4,'0') : '');
+  $('dot').classList.add('on');
+  $('btnConnect').disabled=true; $('btnDisconnect').disabled=false;
+  ['proto','baud'].forEach(id=>$(id).disabled=true);
+  notice('ok','Port open. Asking the BMS for data…');
+  history.length=0; polling=true; pollLoop();
+}
+
+async function disconnect(){
+  polling=false; reading=false;
+  try{ if(reader) await reader.cancel(); }catch{}
+  try{ if(writer){ writer.releaseLock(); writer=null; } }catch{}
+  try{ if(port) await port.close(); }catch{}
+  port=null;
+  $('dot').classList.remove('on'); $('portLabel').textContent='Not connected';
+  $('btnConnect').disabled=false; $('btnDisconnect').disabled=true;
+  ['proto','baud'].forEach(id=>$(id).disabled=false);
+  notice('', 'Disconnected.');
+}
+
+async function readLoop(){
+  while(port && port.readable && reading){
+    reader = port.readable.getReader();
+    try{
+      while(true){
+        const {value,done} = await reader.read();
+        if(done) break;
+        if(value && value.length){ for(const b of value) rx.push(b); log('rx','RX '+hex(value)); }
+      }
+    }catch(e){ log('er','Read error: '+e.message); }
+    finally{ try{reader.releaseLock();}catch{} }
+  }
+}
+
+async function send(bytes){ log('tx','TX '+hex(bytes)); await writer.write(new Uint8Array(bytes)); }
+
+/* send bytes, then wait until parse(rx) returns something */
+async function transact(bytes, parse, timeout=800){
+  rx=[]; await send(bytes);
+  const t0=performance.now();
+  while(performance.now()-t0<timeout){
+    await sleep(25);
+    const r=parse(rx); if(r) return r;
+  }
+  return parse(rx, true);
+}
+
+/* ---------- JBD / Xiaoxiang ---------- */
+function jbdReq(cmd){ const ck=(0x10000-(cmd+0))&0xFFFF; return [0xDD,0xA5,cmd,0x00,ck>>8,ck&0xFF,0x77]; }
+function jbdParse(buf){
+  for(let i=0;i<buf.length;i++){
+    if(buf[i]!==0xDD || i+4>buf.length) continue;
+    const len=buf[i+3], end=i+4+len+3;
+    if(end>buf.length) return null;
+    if(buf[end-1]!==0x77) continue;
+    const body=buf.slice(i+2,i+4+len); let s=0; for(const b of body) s+=b;
+    const ck=(buf[end-3]<<8)|buf[end-2];
+    if(((0x10000-s)&0xFFFF)!==ck) { log('er','JBD checksum mismatch'); continue; }
+    return {cmd:buf[i+1], status:buf[i+2], data:buf.slice(i+4,i+4+len)};
+  }
+  return null;
+}
+const u16=(d,o)=>(d[o]<<8)|d[o+1];
+const s16=(d,o)=>{const v=u16(d,o);return v>0x7FFF?v-0x10000:v;};
+const JBD_FAULTS=['Cell over-voltage','Cell under-voltage','Pack over-voltage','Pack under-voltage','Charge over-temp','Charge under-temp','Discharge over-temp','Discharge under-temp','Charge over-current','Discharge over-current','Short circuit','Front-end IC error','MOS locked by software'];
+
+async function readJBD(){
+  const a=await transact(jbdReq(0x03),jbdParse);
+  if(!a||a.status!==0) throw new Error('No reply to JBD basic-info request (0x03)');
+  const d=a.data, ntc=d[22], temps=[];
+  for(let k=0;k<ntc;k++) temps.push((u16(d,23+2*k)-2731)/10);
+  const prot=u16(d,16), faults=JBD_FAULTS.filter((_,b)=>prot&(1<<b));
+  const s={proto:'JBD',voltage:u16(d,0)/100,current:s16(d,2)/100,remainAh:u16(d,4)/100,fullAh:u16(d,6)/100,
+    cycles:u16(d,8),soc:d[19],chgMos:!!(d[20]&1),dsgMos:!!(d[20]&2),cellCount:d[21],temps,faults,
+    balance:(u16(d,12)<<16)|u16(d,14),cells:[]};
+  const b=await transact(jbdReq(0x04),jbdParse);
+  if(b&&b.status===0) for(let k=0;k+1<b.data.length;k+=2) s.cells.push(u16(b.data,k));
+  return s;
+}
+
+/* ---------- Daly ---------- */
+function dalyReq(cmd){ const f=[0xA5,0x40,cmd,0x08,0,0,0,0,0,0,0,0]; let s=0; for(const b of f) s+=b; f.push(s&0xFF); return f; }
+function dalyFrames(buf,cmd){
+  const out=[];
+  for(let i=0;i+13<=buf.length;i++){
+    if(buf[i]!==0xA5||buf[i+2]!==cmd) continue;
+    let s=0; for(let k=0;k<12;k++) s+=buf[i+k];
+    if((s&0xFF)!==buf[i+12]) continue;
+    out.push(buf.slice(i+4,i+12)); i+=12;
+  }
+  return out;
+}
+const dalyOne=cmd=>(buf)=>{ const f=dalyFrames(buf,cmd); return f.length?f[0]:null; };
+const DALY_FAULTS=[[0,0,'Cell over-voltage L1'],[0,1,'Cell over-voltage L2'],[0,2,'Cell under-voltage L1'],[0,3,'Cell under-voltage L2'],[0,4,'Pack over-voltage L1'],[0,5,'Pack over-voltage L2'],[0,6,'Pack under-voltage L1'],[0,7,'Pack under-voltage L2'],
+ [1,0,'Charge over-temp L1'],[1,1,'Charge over-temp L2'],[1,2,'Charge under-temp L1'],[1,3,'Charge under-temp L2'],[1,4,'Discharge over-temp L1'],[1,5,'Discharge over-temp L2'],[1,6,'Discharge under-temp L1'],[1,7,'Discharge under-temp L2'],
+ [2,0,'Charge over-current L1'],[2,1,'Charge over-current L2'],[2,2,'Discharge over-current L1'],[2,3,'Discharge over-current L2'],[2,4,'SOC high L1'],[2,5,'SOC high L2'],[2,6,'SOC low L1'],[2,7,'SOC low L2'],
+ [3,0,'Cell imbalance L1'],[3,1,'Cell imbalance L2'],[3,2,'Temp difference L1'],[3,3,'Temp difference L2'],
+ [4,0,'Charge MOS over-temp'],[4,1,'Discharge MOS over-temp'],[4,2,'Charge MOS sensor fault'],[4,3,'Discharge MOS sensor fault'],[4,4,'Charge MOS adhesion'],[4,5,'Discharge MOS adhesion'],[4,6,'Charge MOS open circuit'],[4,7,'Discharge MOS open circuit'],
+ [5,0,'AFE chip fault'],[5,1,'Voltage sensing fault'],[5,2,'Temp sensor fault'],[5,3,'EEPROM fault'],[5,4,'RTC fault'],[5,5,'Precharge failed'],[5,6,'Vehicle comms fault'],[5,7,'Network comms fault'],
+ [6,0,'Current sensor fault'],[6,1,'Voltage sensor fault'],[6,2,'Short-circuit protection'],[6,3,'Low-voltage charge blocked']];
+
+async function readDaly(){
+  const a=await transact(dalyReq(0x90),dalyOne(0x90));
+  if(!a) throw new Error('No reply to Daly 0x90 request');
+  const s={proto:'Daly',voltage:u16(a,0)/10,current:(u16(a,4)-30000)/10,soc:u16(a,6)/10,temps:[],cells:[],faults:[]};
+  const t=await transact(dalyReq(0x92),dalyOne(0x92)); if(t){ s.temps=[t[0]-40,t[2]-40]; }
+  const m=await transact(dalyReq(0x93),dalyOne(0x93));
+  if(m){ s.chgMos=!!m[1]; s.dsgMos=!!m[2]; s.remainAh=((m[4]<<24)|(m[5]<<16)|(m[6]<<8)|m[7])/1000; }
+  const st=await transact(dalyReq(0x94),dalyOne(0x94));
+  if(st){ s.cellCount=st[0]; s.cycles=u16(st,5); }
+  const n=s.cellCount||0, need=Math.ceil(n/3);
+  if(n){
+    const fr=await transact(dalyReq(0x95),(buf,final)=>{const f=dalyFrames(buf,0x95);return (f.length>=need||final)&&f.length?f:null;},1200);
+    if(fr){ const cells=[]; fr.sort((x,y)=>x[0]-y[0]).forEach(f=>{for(let k=0;k<3;k++){const idx=(f[0]-1)*3+k; if(idx<n) cells[idx]=u16(f,1+2*k);}}); s.cells=cells.filter(v=>v!=null); }
+  }
+  const er=await transact(dalyReq(0x98),dalyOne(0x98));
+  if(er) s.faults=DALY_FAULTS.filter(([by,bit])=>er[by]&(1<<bit)).map(x=>x[2]);
+  if(s.remainAh!=null && s.soc>0) s.fullAh=s.remainAh/(s.soc/100);
+  return s;
+}
+
+/* ---------- polling ---------- */
+let fails=0;
+async function pollLoop(){
+  while(polling){
+    const t0=performance.now();
+    try{
+      const s = $('proto').value==='jbd' ? await readJBD() : await readDaly();
+      fails=0; demo=false; $('demoTag').hidden=true;
+      notice('ok','Live data from '+s.proto+' BMS · last update '+new Date().toLocaleTimeString());
+      render(s); pushHistory(s);
+    }catch(e){
+      fails++; log('er',e.message);
+      if(fails>=3) notice('err',e.message+'. Check the protocol and baud rate (most JBD and Daly boards use 9600), the TX/RX wiring, and that the BMS is awake. Some boards sleep until a load or charger is connected.');
+    }
+    const wait=+$('interval').value-(performance.now()-t0);
+    if(wait>0) await sleep(wait);
+  }
+}
+
+/* ---------- rendering ---------- */
+const fmt=(v,d=2)=>v==null||isNaN(v)?'–':v.toFixed(d);
+function render(s){
+  const soc=Math.max(0,Math.min(100,s.soc??0));
+  $('battFill').style.width=soc+'%';
+  $('battFill').style.background= soc<15?'var(--bad)':soc<35?'var(--warn)':'var(--good)';
+  $('socTxt').textContent=fmt(s.soc,0)+'%';
+  $('mV').innerHTML=fmt(s.voltage)+'<small>V</small>';
+  $('mI').innerHTML=fmt(s.current)+'<small>A</small>';
+  $('mP').innerHTML=fmt(s.voltage*s.current,0)+'<small>W</small>';
+  $('mRem').innerHTML=fmt(s.remainAh,1)+'<small>Ah</small>';
+  $('mFull').innerHTML=fmt(s.fullAh,1)+'<small>Ah</small>';
+  $('mCyc').textContent=s.cycles??'–';
+  $('mT').innerHTML=s.temps&&s.temps.length? s.temps.map(t=>t.toFixed(1)).join(' / ')+'<small>°C</small>':'–';
+  let eta='–';
+  if(s.current<-0.05 && s.remainAh) eta=hm(s.remainAh/-s.current)+'<small>to empty</small>';
+  else if(s.current>0.05 && s.fullAh && s.remainAh!=null) eta=hm((s.fullAh-s.remainAh)/s.current)+'<small>to full</small>';
+  $('mEta').innerHTML=eta;
+
+  const chips=[];
+  chips.push(s.current>0.05?['chg','Charging']:s.current<-0.05?['warn','Discharging']:['muted','Idle']);
+  if(s.chgMos!=null) chips.push(s.chgMos?['good','Charge FET on']:['bad','Charge FET off']);
+  if(s.dsgMos!=null) chips.push(s.dsgMos?['good','Discharge FET on']:['bad','Discharge FET off']);
+  $('stateChips').innerHTML=chips.map(([c,t])=>`<span class="chip ${c}">${t}</span>`).join('');
+  $('faults').innerHTML = s.faults&&s.faults.length ? s.faults.map(f=>`<span class="chip bad">${f}</span>`).join('') : '<span class="chip good">No protection active</span>';
+
+  const cells=s.cells||[];
+  if(!cells.length){ $('cells').innerHTML='<p style="color:var(--muted);margin:0">No cell voltages received.</p>'; $('cellStats').innerHTML=''; return; }
+  const mx=Math.max(...cells), mn=Math.min(...cells), avg=cells.reduce((a,b)=>a+b,0)/cells.length;
+  const lfp = mx<3700; const lo=lfp?2500:3000, hi=lfp?3650:4250;
+  $('cellStats').innerHTML=`<span>${cells.length} cells · ${lfp?'LiFePO₄':'Li-ion'} scale</span><span>Max <b>${mx}</b> mV</span><span>Min <b>${mn}</b> mV</span><span>Avg <b>${avg.toFixed(0)}</b> mV</span><span>Delta <b style="color:${mx-mn>50?'var(--bad)':mx-mn>20?'var(--warn)':'var(--good)'}">${mx-mn}</b> mV</span>`;
+  $('cells').innerHTML=cells.map((v,i)=>{
+    const pct=Math.max(2,Math.min(100,(v-lo)/(hi-lo)*100));
+    const bal = s.balance && (s.balance&(1<<i)) ? ' ⇄' : '';
+    const cls = v===mx&&mx!==mn?'max':v===mn&&mx!==mn?'min':'';
+    return `<div class="cell ${cls}"><div class="n"><span>Cell ${i+1}${bal}</span></div><div class="bar"><i style="height:${pct}%"></i></div><div class="mv">${(v/1000).toFixed(3)}</div></div>`;
+  }).join('');
+}
+function hm(h){ if(!isFinite(h)||h<0||h>999) return '–'; const H=Math.floor(h), M=Math.round((h-H)*60); return H+'h '+String(M).padStart(2,'0')+'m'; }
+
+function pushHistory(s){
+  history.push({t:new Date(),v:s.voltage,i:s.current,soc:s.soc,cells:(s.cells||[]).slice(),temps:(s.temps||[]).slice()});
+  if(history.length>2000) history.shift();
+  drawChart();
+}
+function drawChart(){
+  const c=$('chart'), dpr=window.devicePixelRatio||1, w=c.clientWidth, h=c.clientHeight;
+  c.width=w*dpr; c.height=h*dpr; const g=c.getContext('2d'); g.scale(dpr,dpr);
+  const cs=getComputedStyle(document.documentElement), col=n=>cs.getPropertyValue(n).trim();
+  g.clearRect(0,0,w,h);
+  const pts=history.slice(-150); if(pts.length<2) { g.fillStyle=col('--muted'); g.font='13px sans-serif'; g.fillText('Waiting for samples…',10,24); return; }
+  const pad={l:44,r:44,t:10,b:20}, W=w-pad.l-pad.r, H=h-pad.t-pad.b;
+  const rng=(arr)=>{let a=Math.min(...arr),b=Math.max(...arr); if(b-a<0.1){a-=0.05;b+=0.05;} const p=(b-a)*0.1; return [a-p,b+p];};
+  const [v0,v1]=rng(pts.map(p=>p.v)), [i0,i1]=rng(pts.map(p=>p.i));
+  g.strokeStyle=col('--line'); g.lineWidth=1; g.fillStyle=col('--muted'); g.font='11px '+col('--f-mono');
+  for(let k=0;k<=4;k++){ const y=pad.t+H*k/4; g.beginPath(); g.moveTo(pad.l,y); g.lineTo(w-pad.r,y); g.stroke();
+    g.textAlign='right'; g.fillText((v1-(v1-v0)*k/4).toFixed(2),pad.l-6,y+4);
+    g.textAlign='left'; g.fillText((i1-(i1-i0)*k/4).toFixed(1),w-pad.r+6,y+4); }
+  const line=(key,lo,hi,color)=>{ g.strokeStyle=color; g.lineWidth=2; g.beginPath();
+    pts.forEach((p,k)=>{const x=pad.l+W*k/(pts.length-1), y=pad.t+H*(1-(p[key]-lo)/(hi-lo)); k?g.lineTo(x,y):g.moveTo(x,y);}); g.stroke();
+    const last=pts[pts.length-1], y=pad.t+H*(1-(last[key]-lo)/(hi-lo)); g.fillStyle=color; g.beginPath(); g.arc(pad.l+W,y,3.5,0,7); g.fill(); };
+  line('v',v0,v1,col('--accent')); line('i',i0,i1,col('--chg'));
+  $('lgV').textContent='Voltage (V, left)'; $('lgI').textContent='Current (A, right)';
+}
+
+/* ---------- CSV + raw ---------- */
+function saveCsv(){
+  if(!history.length){ notice('err','No history yet. Connect to the BMS first.'); return; }
+  const n=Math.max(...history.map(h=>h.cells.length)), nt=Math.max(...history.map(h=>h.temps.length));
+  const head=['time','voltage_V','current_A','soc_pct',...Array.from({length:nt},(_,i)=>'temp'+(i+1)+'_C'),...Array.from({length:n},(_,i)=>'cell'+(i+1)+'_mV')];
+  const rows=history.map(h=>[h.t.toISOString(),h.v,h.i,h.soc,...Array.from({length:nt},(_,i)=>h.temps[i]??''),...Array.from({length:n},(_,i)=>h.cells[i]??'')].join(','));
+  const blob=new Blob([head.join(',')+'\n'+rows.join('\n')],{type:'text/csv'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='bms-history-'+Date.now()+'.csv'; a.click();
+}
+async function sendRaw(){
+  if(!writer){ notice('err','Connect to the port before sending raw bytes.'); return; }
+  const parts=$('raw').value.trim().split(/[\s,]+/).filter(Boolean);
+  const bytes=parts.map(p=>parseInt(p.replace(/^0x/i,''),16));
+  if(!bytes.length||bytes.some(b=>isNaN(b)||b<0||b>255)){ notice('err','Enter bytes as hex pairs separated by spaces, e.g. DD A5 03 00 FF FD 77.'); return; }
+  const was=polling; polling=false; await sleep(300);
+  await send(bytes); await sleep(600);
+  if(was){ polling=true; pollLoop(); }
+}
+
+$('btnConnect').onclick=connect;
+$('btnDisconnect').onclick=disconnect;
+$('btnCsv').onclick=saveCsv;
+$('btnRaw').onclick=sendRaw;
+$('raw').addEventListener('keydown',e=>{if(e.key==='Enter')sendRaw();});
+window.addEventListener('resize',drawChart);
+if('serial' in navigator) navigator.serial.addEventListener('disconnect',()=>{ if(port){ log('er','USB device unplugged'); disconnect(); } });
+try{ const p=localStorage.getItem('bms.proto'); if(p) $('proto').value=p; const b=localStorage.getItem('bms.baud'); if(b) $('baud').value=b; }catch{}
+['proto','baud'].forEach(id=>$(id).addEventListener('change',()=>{try{localStorage.setItem('bms.'+id,$(id).value);}catch{}}));
+
+/* demo sample so the page shows what it does before connecting */
+(function(){
+  const cells=[3312,3318,3309,3321,3315,3298,3317,3314,3320,3311,3316,3313,3319,3310,3317,3315];
+  const s={proto:'Demo',voltage:cells.reduce((a,b)=>a+b)/1000,current:-12.4,remainAh:68.2,fullAh:100,cycles:142,soc:68,chgMos:true,dsgMos:true,temps:[27.4,28.1],faults:[],cells,balance:0};
+  render(s);
+  for(let k=0;k<60;k++){ history.push({t:new Date(Date.now()-(60-k)*2000),v:s.voltage+0.08-k*0.0015+Math.sin(k/4)*0.01,i:-12+Math.sin(k/6)*2.2,soc:68,cells,temps:s.temps}); }
+  requestAnimationFrame(drawChart);
+})();
+</script>
+</body>
+</html>
