@@ -24,7 +24,7 @@ setup(
     entry_points={
         'console_scripts': [
             'bms_node = bms_ros.bms_node:main',
-            'bms_probe = bms_ros.bms_node:probe_main',
+            'bms_probe = bms_ros.bms_node:console_main',
         ],
     },
 )

@@ -1,19 +1,13 @@
-# Parameters for bms_node. port/protocol/baud/rate/timeout normally come from the .env
-# file; set them here (or on the command line) only to override it.
+# ROS parameters for bms_node.
+# port/protocol/baud/rate/timeout normally come from the .env file.
+# Leave them at auto / 0 to use .env (or auto-detect); set a value here to override it.
 bms:
   ros__parameters:
-    port: auto                # auto = .env BMS_PORT, then detect. Linux/WSL: /dev/ttyUSB0 or /dev/serial/by-id/...
-    protocol: auto            # auto = .env BMS_PROTOCOL, then detect (daly | jbd)
-    baud: 0                   # 0 = .env BMS_BAUD or 9600
-    rate: 0.0                 # Hz, 0 = .env BMS_RATE or 1.0
-    timeout: 0.0              # s, 0 = .env BMS_TIMEOUT or 0.6
-    env_file: ""              # path to a .env file; empty = search ./.env, package folder, repo root
-    retry_interval: 5.0       # s between detection attempts while no BMS is found
-    frame_id: battery
-    location: ""
-    serial_number: ""
-    design_capacity: 0.0      # Ah, 0 = unknown (published as NaN)
-    technology: auto          # auto | lifepo4 | lion | lipo | unknown
-    full_soc_threshold: 99.0
-    idle_current: 0.05
-    debug_frames: false
+    port: auto          # e.g. /dev/ttyUSB0 or /dev/serial/by-id/...
+    protocol: auto      # daly | jbd
+    baud: 0             # 0 = .env value or 9600
+    rate: 0.0           # readings per second; 0 = .env value or 1.0
+    timeout: 0.0        # seconds per reply; 0 = .env value or 0.6
+    env_file: ""        # path to a .env file; empty = search the usual places
+    frame_id: battery   # header.frame_id of battery_state
+    debug_frames: false # log every byte sent and received

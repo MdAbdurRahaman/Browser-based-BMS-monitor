@@ -49,7 +49,7 @@ BMS_TIMEOUT=0.6
 
 The node looks for `.env` in this order: the `env_file` parameter, `$BMS_ENV_FILE`, the current folder, this package folder, the repository root. Environment variables named `BMS_*` override the file, and ROS parameters override both.
 
-**Auto-detection.** If `BMS_PORT` is empty or `auto`, or the port doesn't exist (unplugged, renumbered), or it doesn't answer, the node tries every USB serial adapter. Known BMS cable chips go first (CH340/CH341/CH9102, CP210x, FTDI, PL2303). On each port it tries Daly and then JBD (or only `BMS_PROTOCOL` if set) and uses the first one that answers. Bluetooth and built-in serial ports are skipped. When the connection drops, it detects again every `retry_interval` seconds.
+**Auto-detection.** If `BMS_PORT` is empty or `auto`, or the port doesn't exist (unplugged, renumbered), or it doesn't answer, the node tries every USB serial adapter. Known BMS cable chips go first (CH340/CH341/CH9102, CP210x, FTDI, PL2303). On each port it tries Daly and then JBD (or only `BMS_PROTOCOL` if set) and uses the first one that answers. Bluetooth and built-in serial ports are skipped. When the connection drops, it searches again every 5 seconds.
 
 ## Run
 
@@ -98,17 +98,11 @@ See [`config/bms.yaml`](config/bms.yaml).
 | `port` | `auto` | serial device; `auto` = `.env`, then detect |
 | `protocol` | `auto` | `daly`, `jbd`, or `auto` |
 | `baud` | `0` | 0 = `.env` or 9600 |
-| `rate` | `0.0` | Hz; 0 = `.env` or 1.0 |
-| `timeout` | `0.0` | s; 0 = `.env` or 0.6 |
+| `rate` | `0.0` | readings per second; 0 = `.env` or 1.0 |
+| `timeout` | `0.0` | seconds per reply; 0 = `.env` or 0.6 |
 | `env_file` | `""` | explicit `.env` path |
-| `retry_interval` | `5.0` | s between detection attempts |
-| `frame_id` | `battery` | header frame |
-| `location`, `serial_number` | `""` | copied into `BatteryState` |
-| `design_capacity` | `0.0` | Ah, 0 = unknown |
-| `technology` | `auto` | `auto` (guessed from cell voltage), `lifepo4`, `lion`, `lipo`, `unknown` |
-| `full_soc_threshold` | `99.0` | SOC % at which an idle pack reports FULL |
-| `idle_current` | `0.05` | A; smaller currents count as idle |
-| `debug_frames` | `false` | log every TX/RX frame in hex |
+| `frame_id` | `battery` | header frame of `battery_state` |
+| `debug_frames` | `false` | log every byte sent and received |
 
 If no BMS is found, the node keeps running and retries. Diagnostics report ERROR until a BMS answers. `/bms/status` includes the `port` that is in use.
 
@@ -163,8 +157,8 @@ colcon test --packages-select bms_ros && colcon test-result --verbose
 ```
 bms_ros/
 ├── bms_ros/
-│   ├── protocols.py   JBD + Daly frame building and decoding (pure Python)
-│   └── bms_node.py    serial client, .env + auto-detect, console reader and ROS 2 node
+│   ├── protocols.py   Daly + JBD: request bytes, reply decoding (no serial, no ROS)
+│   └── bms_node.py    settings (.env), serial reading, auto-detect, console mode, ROS 2 node
 ├── .env.example
 ├── config/bms.yaml
 ├── launch/bms.launch.py
