@@ -76,11 +76,17 @@ class Settings:
 
 
 def find_env_file(explicit: str = '') -> Optional[Path]:
-    """First .env found: given path, $BMS_ENV_FILE, current folder, package folder, repo root."""
+    """First .env found: given path, $BMS_ENV_FILE, current folder, package folder,
+    repo root, then the installed ROS share folder (install/bms_ros/share/bms_ros/.env)."""
     here = Path(__file__).resolve()
     places = [explicit, os.environ.get('BMS_ENV_FILE'), Path.cwd() / '.env', here.parents[1] / '.env']
     if len(here.parents) > 3:
         places.append(here.parents[3] / '.env')
+    try:
+        from ament_index_python.packages import get_package_share_directory
+        places.append(Path(get_package_share_directory('bms_ros')) / '.env')
+    except Exception:  # not running under ROS
+        pass
     return next((Path(p) for p in places if p and Path(p).is_file()), None)
 
 
