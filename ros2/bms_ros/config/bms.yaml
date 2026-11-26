@@ -1,0 +1,16 @@
+# Parameters for bms_node. Override any of them from the launch file or the command line.
+bms:
+  ros__parameters:
+    port: /dev/ttyUSB0        # Linux/WSL device. Prefer /dev/serial/by-id/... so it survives re-plugging
+    baud: 9600                # JBD and Daly both default to 9600
+    protocol: jbd             # jbd | daly
+    rate: 1.0                 # polls per second (Hz)
+    timeout: 0.6              # seconds to wait for each reply
+    frame_id: battery
+    location: ""              # free text, e.g. "main pack"
+    serial_number: ""
+    design_capacity: 0.0      # Ah, 0 = unknown (published as NaN)
+    technology: auto          # auto | lifepo4 | lion | lipo | unknown
+    full_soc_threshold: 99.0  # SOC % at or above which an idle pack counts as FULL
+    idle_current: 0.05        # A; below this the pack is treated as idle
+    debug_frames: false       # log every TX/RX frame in hex
