@@ -5,7 +5,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from bms_ros import protocols as p  # noqa: E402
-from bms_ros.client import BmsClient, BmsError  # noqa: E402
+from bms_ros.bms_node import BmsClient, BmsError, Settings, find_bms, _parse_env_file  # noqa: E402
 
 
 class FakeSerial:
@@ -133,3 +133,39 @@ def test_daly_no_reply():
         assert False
     except BmsError:
         pass
+
+
+# ------------------------------------------------------------- .env + detection
+def test_env_file_parsing(tmp_path, monkeypatch):
+    env = tmp_path / '.env'
+    env.write_text('# comment\nBMS_PORT=COM26\nBMS_PROTOCOL="DALY"\nBMS_BAUD=19200  # fast\nBMS_RATE=\n')
+    assert _parse_env_file(env)['BMS_BAUD'] == '19200'
+    for k in list(__import__('os').environ):
+        if k.startswith('BMS_'):
+            monkeypatch.delenv(k)
+    s = Settings.load(str(env))
+    assert (s.port, s.protocol, s.baud, s.rate) == ('COM26', 'daly', 19200, 1.0)
+    monkeypatch.setenv('BMS_PORT', 'COM7')          # real env var wins over .env
+    assert Settings.load(str(env)).port == 'COM7'
+
+
+def _daly_port():
+    return FakeSerial({
+        p.daly_request(0x90): daly_reply(0x90, be16(228) + be16(0) + be16(30000) + be16(438)),
+    })
+
+
+def test_detect_falls_back_when_configured_port_missing_or_silent():
+    ports = {'COM19': FakeSerial({}), 'COM26': _daly_port()}
+
+    def opener(name, _baud):
+        if name not in ports:
+            raise OSError('not found')
+        return ports[name]
+    FakeSerial.close = lambda self: None
+    logs = []
+    s = Settings(port='COM19', protocol='', timeout=0.15)
+    assert find_bms(s, logs.append, opener, candidates=[('COM19', 'CH340'), ('COM26', 'CH340')]) == ('COM26', 'daly')
+    assert any('COM19' in m for m in logs)
+    s = Settings(port='', protocol='jbd', timeout=0.15)  # wrong protocol forced: nothing answers
+    assert find_bms(s, logs.append, opener, candidates=[('COM26', 'CH340')]) is None

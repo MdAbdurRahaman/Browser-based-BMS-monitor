@@ -1,16 +1,19 @@
-# Parameters for bms_node. Override any of them from the launch file or the command line.
+# Parameters for bms_node. port/protocol/baud/rate/timeout normally come from the .env
+# file; set them here (or on the command line) only to override it.
 bms:
   ros__parameters:
-    port: /dev/ttyUSB0        # Linux/WSL device. Prefer /dev/serial/by-id/... so it survives re-plugging
-    baud: 9600                # JBD and Daly both default to 9600
-    protocol: jbd             # jbd | daly
-    rate: 1.0                 # polls per second (Hz)
-    timeout: 0.6              # seconds to wait for each reply
+    port: auto                # auto = .env BMS_PORT, then detect. Linux/WSL: /dev/ttyUSB0 or /dev/serial/by-id/...
+    protocol: auto            # auto = .env BMS_PROTOCOL, then detect (daly | jbd)
+    baud: 0                   # 0 = .env BMS_BAUD or 9600
+    rate: 0.0                 # Hz, 0 = .env BMS_RATE or 1.0
+    timeout: 0.0              # s, 0 = .env BMS_TIMEOUT or 0.6
+    env_file: ""              # path to a .env file; empty = search ./.env, package folder, repo root
+    retry_interval: 5.0       # s between detection attempts while no BMS is found
     frame_id: battery
-    location: ""              # free text, e.g. "main pack"
+    location: ""
     serial_number: ""
     design_capacity: 0.0      # Ah, 0 = unknown (published as NaN)
     technology: auto          # auto | lifepo4 | lion | lipo | unknown
-    full_soc_threshold: 99.0  # SOC % at or above which an idle pack counts as FULL
-    idle_current: 0.05        # A; below this the pack is treated as idle
-    debug_frames: false       # log every TX/RX frame in hex
+    full_soc_threshold: 99.0
+    idle_current: 0.05
+    debug_frames: false

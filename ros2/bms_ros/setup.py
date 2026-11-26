@@ -12,6 +12,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', glob('launch/*.launch.py')),
         ('share/' + package_name + '/config', glob('config/*.yaml')),
+        ('share/' + package_name, ['.env.example']),
     ],
     install_requires=['setuptools', 'pyserial'],
     zip_safe=True,
@@ -23,7 +24,7 @@ setup(
     entry_points={
         'console_scripts': [
             'bms_node = bms_ros.bms_node:main',
-            'bms_probe = bms_ros.client:main',
+            'bms_probe = bms_ros.bms_node:probe_main',
         ],
     },
 )

@@ -35,25 +35,43 @@ Give your user access to serial ports once, then log out and back in:
 sudo usermod -aG dialout $USER
 ```
 
+## Configuration: `.env` and auto-detection
+
+Port and protocol normally come from a `.env` file. Copy [`.env.example`](.env.example) to `.env`:
+
+```
+BMS_PORT=/dev/ttyUSB0      # COM26 on Windows
+BMS_PROTOCOL=daly          # daly | jbd
+BMS_BAUD=9600
+BMS_RATE=1.0
+BMS_TIMEOUT=0.6
+```
+
+The node looks for `.env` in this order: the `env_file` parameter, `$BMS_ENV_FILE`, the current folder, this package folder, the repository root. Environment variables named `BMS_*` override the file, and ROS parameters override both.
+
+**Auto-detection.** If `BMS_PORT` is empty or `auto`, or the port doesn't exist (unplugged, renumbered), or it doesn't answer, the node tries every USB serial adapter. Known BMS cable chips go first (CH340/CH341/CH9102, CP210x, FTDI, PL2303). On each port it tries Daly and then JBD (or only `BMS_PROTOCOL` if set) and uses the first one that answers. Bluetooth and built-in serial ports are skipped. When the connection drops, it detects again every `retry_interval` seconds.
+
 ## Run
 
 ```bash
 # check the BMS answers (no ROS graph needed)
-ros2 run bms_ros bms_probe --port /dev/ttyUSB0 --protocol jbd --verbose
+ros2 run bms_ros bms_probe --verbose          # uses .env / auto-detect
+ros2 run bms_ros bms_probe --list             # list USB serial ports
 
 # start the node
-ros2 launch bms_ros bms.launch.py port:=/dev/ttyUSB0 protocol:=jbd
+ros2 launch bms_ros bms.launch.py             # .env / auto-detect
+ros2 launch bms_ros bms.launch.py port:=/dev/ttyUSB0 protocol:=daly
 
 # look at the data
 ros2 topic echo /bms/battery_state --qos-reliability best_effort
 ros2 topic echo /bms/status
 ```
 
-For more than one pack, launch the node once per pack with a different namespace:
+For more than one pack, launch the node once per pack with its own namespace and `.env` (give each a fixed port, since auto-detect picks the first BMS it finds):
 
 ```bash
-ros2 launch bms_ros bms.launch.py namespace:=pack_a port:=/dev/ttyUSB0 protocol:=jbd
-ros2 launch bms_ros bms.launch.py namespace:=pack_b port:=/dev/ttyUSB1 protocol:=daly
+ros2 launch bms_ros bms.launch.py namespace:=pack_a env_file:=$HOME/pack_a.env
+ros2 launch bms_ros bms.launch.py namespace:=pack_b env_file:=$HOME/pack_b.env
 ```
 
 Use `/dev/serial/by-id/usb-...` instead of `/dev/ttyUSB0` so the port name stays the same after re-plugging.
@@ -77,11 +95,13 @@ See [`config/bms.yaml`](config/bms.yaml).
 
 | Parameter | Default | Meaning |
 |---|---|---|
-| `port` | `/dev/ttyUSB0` | serial device |
-| `baud` | `9600` | baud rate |
-| `protocol` | `jbd` | `jbd` or `daly` |
-| `rate` | `1.0` | polls per second |
-| `timeout` | `0.6` | seconds to wait for each reply |
+| `port` | `auto` | serial device; `auto` = `.env`, then detect |
+| `protocol` | `auto` | `daly`, `jbd`, or `auto` |
+| `baud` | `0` | 0 = `.env` or 9600 |
+| `rate` | `0.0` | Hz; 0 = `.env` or 1.0 |
+| `timeout` | `0.0` | s; 0 = `.env` or 0.6 |
+| `env_file` | `""` | explicit `.env` path |
+| `retry_interval` | `5.0` | s between detection attempts |
 | `frame_id` | `battery` | header frame |
 | `location`, `serial_number` | `""` | copied into `BatteryState` |
 | `design_capacity` | `0.0` | Ah, 0 = unknown |
@@ -90,7 +110,7 @@ See [`config/bms.yaml`](config/bms.yaml).
 | `idle_current` | `0.05` | A; smaller currents count as idle |
 | `debug_frames` | `false` | log every TX/RX frame in hex |
 
-If the port can't be opened or is unplugged, the node keeps running and retries on every poll. Diagnostics report ERROR until the port works again.
+If no BMS is found, the node keeps running and retries. Diagnostics report ERROR until a BMS answers. `/bms/status` includes the `port` that is in use.
 
 ## Using it from your own nodes
 
@@ -114,13 +134,17 @@ from std_msgs.msg import String
 self.create_subscription(String, '/bms/status', lambda m: print(json.loads(m.data)['faults']), 10)
 ```
 
-**Without ROS:** the protocol code in `bms_ros/protocols.py` and `bms_ros/client.py` only needs pyserial:
+**Without ROS:** `bms_node.py` falls back to a console reader when `rclpy` isn't installed, for example on Windows. It only needs pyserial:
+
+```bash
+python -m bms_ros.bms_node --loop 2            # .env / auto-detect, print JSON every 2 s
+python -m bms_ros.bms_node --port COM26 --protocol daly --verbose
+```
 
 ```python
-import serial
-from bms_ros.client import BmsClient
-with serial.Serial('/dev/ttyUSB0', 9600, timeout=0.05) as port:   # or 'COM19' on Windows
-    print(BmsClient(port, 'jbd').read().to_dict())
+from bms_ros.bms_node import BmsConnection, Settings
+conn = BmsConnection(Settings.load())          # reads .env, auto-detects
+print(conn.read().to_dict(), conn.port)
 ```
 
 ## Tests
@@ -139,8 +163,8 @@ colcon test --packages-select bms_ros && colcon test-result --verbose
 bms_ros/
 ├── bms_ros/
 │   ├── protocols.py   JBD + Daly frame building and decoding (pure Python)
-│   ├── client.py      serial polling client + bms_probe CLI
-│   └── bms_node.py    ROS 2 node
+│   └── bms_node.py    serial client, .env + auto-detect, console reader and ROS 2 node
+├── .env.example
 ├── config/bms.yaml
 ├── launch/bms.launch.py
 ├── test/test_protocols.py
