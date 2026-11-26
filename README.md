@@ -67,6 +67,10 @@ Basic info: `DD A5 03 00 FF FD 77`. Cell voltages: `DD A5 04 00 FF FC 77`.
 **Daly:** 13-byte frames `A5 40 <cmd> 08 <8 data bytes> <chk>`, where the checksum is the low byte of the sum of the first 12 bytes.
 Example: `A5 40 90 08 00 00 00 00 00 00 00 00 7D`.
 
+## Windows launchers
+
+The [`windows`](windows) folder has double-click `.bat` files: `Start-WebApp.bat` serves the app on `http://localhost:8765` and opens it in Edge, `Start-Monitor.bat` prints live readings in a console, and `List-Ports.bat` finds the COM port.
+
 ## ROS 2 node
 
 [`ros2/bms_ros`](ros2/bms_ros) is a ROS 2 (Jazzy/Humble) driver with the same JBD and Daly support. It publishes `sensor_msgs/BatteryState` on `/bms/battery_state`, a JSON status topic with every field, and `/diagnostics`, so other ROS applications can reuse the battery data. Clone this repo into your workspace's `src/` folder and `colcon build --packages-select bms_ros`. See its [README](ros2/bms_ros/README.md) for topics, parameters and WSL/COM port setup.
@@ -80,6 +84,7 @@ ros2 launch bms_ros bms.launch.py port:=/dev/ttyUSB0 protocol:=jbd
 ```
 index.html        the browser app (HTML, CSS and JavaScript in one file)
 ros2/bms_ros/     ROS 2 driver package
+windows/          double-click launchers for Windows (web app, console monitor, port list)
 README.md         this file
 ```
 

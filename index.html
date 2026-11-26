@@ -425,6 +425,7 @@ $('raw').addEventListener('keydown',e=>{if(e.key==='Enter')sendRaw();});
 window.addEventListener('resize',drawChart);
 if('serial' in navigator) navigator.serial.addEventListener('disconnect',()=>{ if(port){ log('er','USB device unplugged'); disconnect(); } });
 try{ const p=localStorage.getItem('bms.proto'); if(p) $('proto').value=p; const b=localStorage.getItem('bms.baud'); if(b) $('baud').value=b; }catch{}
+if(location.hash==='#daly'||location.hash==='#jbd') $('proto').value=location.hash.slice(1);
 ['proto','baud'].forEach(id=>$(id).addEventListener('change',()=>{try{localStorage.setItem('bms.'+id,$(id).value);}catch{}}));
 
 /* demo sample so the page shows what it does before connecting */
