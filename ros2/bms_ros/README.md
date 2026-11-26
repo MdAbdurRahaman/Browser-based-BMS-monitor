@@ -152,6 +152,7 @@ print(conn.read().to_dict(), conn.port)
 The tests run against a simulated BMS, so no hardware or ROS is needed:
 
 ```bash
+pip install -r ../../requirements-dev.txt
 cd ros2/bms_ros && python3 -m pytest test/
 # or inside a workspace
 colcon test --packages-select bms_ros && colcon test-result --verbose

@@ -6,7 +6,7 @@ rem or the port there is wrong, the BMS is found automatically.
 rem You can still override: Start-Monitor.bat COM26 daly
 cd /d "%~dp0..\ros2\bms_ros"
 where python >nul 2>nul || (echo Python was not found. Install it from https://www.python.org/ and tick "Add to PATH". & pause & exit /b 1)
-python -c "import serial" 2>nul || pip install pyserial
+python -c "import serial" 2>nul || pip install -r "%~dp0..\requirements.txt"
 set ARGS=
 if not "%~1"=="" set ARGS=--port %~1
 if not "%~2"=="" set ARGS=%ARGS% --protocol %~2

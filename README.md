@@ -27,6 +27,17 @@ Other protocols (JK, ANT, Seplos, Pace RS485) are not decoded yet, but you can s
 - A USB-to-UART adapter (CH340, CP2102, FT232) or the BMS's own USB cable, with its driver installed.
 - The page must be opened from `file://`, `localhost` or `https://`. Web Serial is blocked on plain `http://`.
 
+## Python requirements
+
+The web app needs no installs. The Python reader in `ros2/bms_ros` (and the Windows launchers) needs **pyserial**:
+
+```bash
+pip install -r requirements.txt          # pyserial
+pip install -r requirements-dev.txt      # + pytest, to run the tests
+```
+
+For the ROS 2 node, `rclpy` and the message packages come from ROS (`rosdep install`); on Ubuntu, pyserial is `sudo apt install python3-serial`.
+
 ## Usage
 
 1. Download `index.html`, or clone the repo:
@@ -85,6 +96,8 @@ ros2 launch bms_ros bms.launch.py port:=/dev/ttyUSB0 protocol:=jbd
 index.html        the browser app (HTML, CSS and JavaScript in one file)
 ros2/bms_ros/     ROS 2 driver package
 windows/          double-click launchers for Windows (web app, console monitor, port list)
+requirements.txt  Python libraries (pyserial)
+requirements-dev.txt  + pytest for the tests
 README.md         this file
 ```
 

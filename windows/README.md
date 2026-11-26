@@ -1,6 +1,6 @@
 # Running on Windows
 
-Double-click launchers. They need [Python](https://www.python.org/downloads/) on PATH; pyserial is installed automatically.
+Double-click launchers. They need [Python](https://www.python.org/downloads/) on PATH; the libraries in `requirements.txt` (only pyserial) are installed automatically on first run.
 
 | File | What it does |
 |---|---|

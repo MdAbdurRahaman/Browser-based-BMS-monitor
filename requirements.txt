@@ -1,0 +1,8 @@
+# Python libraries for the BMS reader (bms_node.py) on Windows, Linux or macOS.
+#   pip install -r requirements.txt
+#
+# The web app (index.html) needs nothing: it runs in Chrome or Edge.
+# For the ROS 2 node, rclpy and the message packages come from ROS itself
+# (apt / rosdep), not from pip. On Ubuntu you can use: sudo apt install python3-serial
+
+pyserial>=3.5
